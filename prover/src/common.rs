@@ -7,7 +7,10 @@ use crate::{
     },
     prelude::*,
 };
+use itertools::Itertools;
+use num::{BigUint, FromPrimitive, Zero};
 use plonky2::{
+    hash::hash_types::HashOut,
     iop::{
         target::{BoolTarget, Target},
         witness::{PartialWitness, WitnessWrite},
@@ -18,6 +21,8 @@ use plonky2::{
         proof::{Proof, ProofWithPublicInputs},
     },
 };
+use plonky2_field::types::Field64;
+use serde::Serialize;
 pub use targets::TargetSet;
 
 pub mod targets {
@@ -241,6 +246,18 @@ where
     public_inputs_parser: PhantomData<TS>,
 }
 
+#[derive(Serialize)]
+struct VerifierOnlyCircuitData {
+    constants_sigmas_cap: Vec<String>,
+    circuit_digest: String,
+}
+
+pub struct SerializedVerifierData {
+    pub common_circuit_data: String,
+    pub proof_with_public_inputs: String,
+    pub verifier_only_circuit_data: String,
+}
+
 impl<TS> ProofWithCircuitData<TS>
 where
     TS: TargetSet,
@@ -260,6 +277,33 @@ where
             circuit_data,
             public_inputs,
             public_inputs_parser: PhantomData,
+        }
+    }
+
+    pub fn serialize(&self) -> SerializedVerifierData {
+        let proof_with_public_inputs = serde_json::to_string(&ProofWithPublicInputs {
+            proof: self.proof.clone(),
+            public_inputs: self.public_inputs.clone(),
+        })
+        .unwrap();
+
+        let common_circuit_data = serde_json::to_string(&self.circuit_data.common).unwrap();
+
+        let verifier_only_circuit_data =
+            serde_json::to_string(&self.circuit_data.verifier_only).unwrap();
+
+        std::fs::write("./common_circuit_data.json", &common_circuit_data).unwrap();
+        std::fs::write("./proof_with_public_inputs.json", &proof_with_public_inputs).unwrap();
+        std::fs::write(
+            "./verifier_only_circuit_data.json",
+            &verifier_only_circuit_data,
+        )
+        .unwrap();
+
+        SerializedVerifierData {
+            common_circuit_data,
+            proof_with_public_inputs,
+            verifier_only_circuit_data,
         }
     }
 
